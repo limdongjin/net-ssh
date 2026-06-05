@@ -29,6 +29,19 @@ module NetSSH
         end
       end
 
+      class SleepingScheduler
+        attr_reader :sleeps
+
+        def initialize
+          @sleeps = []
+        end
+
+        def kernel_sleep(timeout = nil)
+          @sleeps << timeout
+          nil
+        end
+      end
+
       class FailingScheduler
         def io_wait(*)
           raise "scheduler should not be used"
@@ -91,6 +104,24 @@ module NetSSH
       ensure
         reader&.close
         writer&.close
+      end
+
+      def test_no_io_uses_scheduler_sleep
+        scheduler = SleepingScheduler.new
+        loop = TestLoop.new
+        loop.scheduler = scheduler
+
+        assert_equal [nil, nil, nil], loop.send(:io_select, [], [], 0.25)
+        assert_equal [0.25], scheduler.sleeps
+      end
+
+      def test_no_io_zero_timeout_returns_timeout_tuple
+        scheduler = SleepingScheduler.new
+        loop = TestLoop.new
+        loop.scheduler = scheduler
+
+        assert_equal [nil, nil, nil], loop.send(:io_select, [], [], 0)
+        assert_equal [], scheduler.sleeps
       end
 
       def test_multiple_ios_fall_back_to_io_select

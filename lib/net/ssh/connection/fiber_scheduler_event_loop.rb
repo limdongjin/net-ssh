@@ -21,9 +21,9 @@ module Net
         def io_select(readers, writers, timeout)
           readers = Array(readers).compact
           writers = Array(writers).compact
-          return [[], [], []] if readers.empty? && writers.empty?
-
           scheduler = current_scheduler
+
+          return wait_without_io(timeout, scheduler) if readers.empty? && writers.empty?
           return blocking_io_select(readers, writers, timeout) unless scheduler
           return blocking_io_select(readers, writers, timeout) unless scheduler.respond_to?(:io_wait)
           return blocking_io_select(readers, writers, timeout) if timeout == 0
@@ -40,8 +40,19 @@ module Net
           Fiber.respond_to?(:scheduler) ? Fiber.scheduler : nil
         end
 
+        def wait_without_io(timeout, scheduler)
+          return [nil, nil, nil] if timeout == 0
+
+          if scheduler&.respond_to?(:kernel_sleep)
+            scheduler.kernel_sleep(timeout)
+            [nil, nil, nil]
+          else
+            blocking_io_select([], [], timeout)
+          end
+        end
+
         def blocking_io_select(readers, writers, timeout)
-          IO.select(readers, writers, nil, timeout)
+          IO.select(readers, writers, nil, timeout) || [nil, nil, nil]
         end
 
         def wait_with_scheduler(io, readers, writers, timeout, scheduler)

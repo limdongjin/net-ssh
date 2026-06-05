@@ -80,8 +80,7 @@ module Net
         end
 
         def selected_from_mask(io, readers, writers, mask)
-          return [nil, nil, nil] if mask.nil? || mask == false
-          return nil if mask == 0
+          return [nil, nil, nil] if mask.nil? || mask == false || mask == 0
 
           ready_readers = readers.include?(io) && (mask & IO::READABLE) != 0 ? [io] : []
           ready_writers = writers.include?(io) && (mask & IO::WRITABLE) != 0 ? [io] : []

@@ -35,6 +35,28 @@ module NetSSH
         end
       end
 
+      class FakeSession
+        attr_reader :handled_readers, :handled_writers, :postprocess_was_events
+
+        def initialize(reader)
+          @reader = reader
+        end
+
+        def ev_do_calculate_rw_wait(wait)
+          [[@reader], [], wait]
+        end
+
+        def ev_do_handle_events(readers, writers)
+          @handled_readers = readers
+          @handled_writers = writers
+        end
+
+        def ev_do_postprocess(was_events)
+          @postprocess_was_events = was_events
+          true
+        end
+      end
+
       def test_single_io_uses_scheduler_wait
         reader, writer = IO.pipe
         scheduler = WakingScheduler.new(writer)
@@ -48,6 +70,24 @@ module NetSSH
         assert_equal 1, scheduler.calls.length
         assert_equal reader, scheduler.calls.first[0]
         assert_equal IO::READABLE, scheduler.calls.first[1]
+      ensure
+        reader&.close
+        writer&.close
+      end
+
+      def test_event_loop_dispatch_uses_scheduler_selected_io
+        reader, writer = IO.pipe
+        scheduler = WakingScheduler.new(writer)
+        loop = TestLoop.new
+        loop.scheduler = scheduler
+        session = FakeSession.new(reader)
+        loop.register(session)
+
+        loop.ev_select_and_postprocess(1)
+
+        assert_equal [reader], session.handled_readers
+        assert_equal [], session.handled_writers
+        assert_equal true, session.postprocess_was_events
       ensure
         reader&.close
         writer&.close

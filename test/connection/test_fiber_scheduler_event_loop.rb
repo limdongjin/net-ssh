@@ -29,6 +29,19 @@ module NetSSH
         end
       end
 
+      class ZeroMaskScheduler
+        attr_reader :calls
+
+        def initialize
+          @calls = []
+        end
+
+        def io_wait(io, events, timeout)
+          @calls << [io, events, timeout]
+          0
+        end
+      end
+
       class SleepingScheduler
         attr_reader :sleeps
 
@@ -83,6 +96,19 @@ module NetSSH
         assert_equal 1, scheduler.calls.length
         assert_equal reader, scheduler.calls.first[0]
         assert_equal IO::READABLE, scheduler.calls.first[1]
+      ensure
+        reader&.close
+        writer&.close
+      end
+
+      def test_zero_readiness_mask_returns_timeout_tuple
+        reader, writer = IO.pipe
+        scheduler = ZeroMaskScheduler.new
+        loop = TestLoop.new
+        loop.scheduler = scheduler
+
+        assert_equal [nil, nil, nil], loop.send(:io_select, [reader], [], 1)
+        assert_equal 1, scheduler.calls.length
       ensure
         reader&.close
         writer&.close

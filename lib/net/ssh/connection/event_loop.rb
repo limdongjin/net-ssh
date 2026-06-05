@@ -68,7 +68,7 @@ module Net
             sw.each { |wi| owners[wi] = session }
           end
 
-          readers, writers, = IO.select(r, w, nil, minwait)
+          readers, writers, = io_select(r, w, minwait)
 
           fired_sessions = {}
 
@@ -92,6 +92,12 @@ module Net
           @sessions.each { |s| s.ev_do_postprocess(fired_sessions.key?(s)) }
           true
         end
+
+        private
+
+        def io_select(readers, writers, timeout)
+          IO.select(readers, writers, nil, timeout)
+        end
       end
 
       # optimized version for a single session
@@ -112,7 +118,7 @@ module Net
 
           session = @sessions.first
           sr, sw, actwait = session.ev_do_calculate_rw_wait(wait)
-          readers, writers, = IO.select(sr, sw, nil, actwait)
+          readers, writers, = io_select(sr, sw, actwait)
 
           session.ev_do_handle_events(readers, writers)
           session.ev_do_postprocess(!((readers.nil? || readers.empty?) && (writers.nil? || writers.empty?)))
